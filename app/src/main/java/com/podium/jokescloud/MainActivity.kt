@@ -3,30 +3,29 @@ package com.podium.jokescloud
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import android.widget.Button
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.firebase.ui.auth.AuthUI
 import com.firebase.ui.auth.FirebaseAuthUIActivityResultContract
 import com.firebase.ui.auth.data.model.FirebaseAuthUIAuthenticationResult
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.SignInButton
+import com.google.android.material.snackbar.Snackbar
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.podium.jokescloud.model.MyUser
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var googleSignInClient: GoogleSignInClient
-    private lateinit var auth: FirebaseAuth
+
     private lateinit var signInbtn: SignInButton
+    private lateinit var auth: FirebaseAuth
+    private lateinit var db: FirebaseFirestore
 
     companion object {
-        private const val RC_SIGN_IN = 9999
-        private const val TAG = "AuthActivity"
+        private const val COLLECTION_USER = "users"
     }
 
     private val signInLauncher =
@@ -51,12 +50,24 @@ class MainActivity : AppCompatActivity() {
         if (result.resultCode == RESULT_OK) {
             // Successfully signed in
             val user = FirebaseAuth.getInstance().currentUser
-            user?.let { updateUI(it) }
+            if (user != null) {
+                val userInfo = MyUser(user.email, user.uid, "google")
+                db.collection(COLLECTION_USER).document(user.uid).set(userInfo)
+                    .addOnSuccessListener {
+                        updateUI(user)
+                    }
+                    .addOnFailureListener {
+                        Snackbar.make(signInbtn, "error: ${it.message}", Snackbar.LENGTH_LONG)
+                            .show()
+                        Log.d("Firebase Error", "error: ${it.message}")
+                    }
+            }
+
         } else {
 
             val errorCode = response?.error?.errorCode
             val message = response?.error?.message
-            Toast.makeText(this, "error: ($errorCode) $message", Toast.LENGTH_LONG).show()
+            Snackbar.make(signInbtn, "error: ($errorCode) $message", Snackbar.LENGTH_LONG).show()
             Log.d("Firebase Error", "error: ($errorCode) $message")
 
         }
@@ -66,6 +77,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         auth = Firebase.auth
+        db = Firebase.firestore
         signInbtn = findViewById(R.id.sign_in_button)
         signInbtn.setOnClickListener {
             createSignInIntent()
